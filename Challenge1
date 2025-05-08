@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+
+import rospy
+import cv2
+import numpy as np
+from duckietown_msgs.msg import Twist2DStamped
+from sensor_msgs.msg import CompressedImage
+import time
+
+class LaneFollower:
+    def __init__(self):
+        rospy.init_node('lane_follower')
+        
+        # Publisher to send velocity commands
+        self.pub = rospy.Publisher('/duckiebot_name/car_cmd_switch_node/cmd', Twist2DStamped, queue_size=1)
+
+        # Subscriber to camera image
+        rospy.Subscriber('/duckiebot_name/camera_node/image/compressed', CompressedImage, self.image_callback)
+        
+        self.stop_flag = False
+        self.stopped_time = None
+
+    def image_callback(self, msg):
+        np_arr = np.frombuffer(msg.data, np.uint8)
+        image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        height, width, _ = image.shape
+
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        # Red line detection (stop line)
+        lower_red1 = np.array([0, 100, 100])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([160, 100, 100])
+        upper_red2 = np.array([180, 255, 255])
+        mask_red = cv2.inRange(hsv, lower_red1, upper_red1) + cv2.inRange(hsv, lower_red2, upper_red2)
+
+        red_ratio = np.sum(mask_red) / 255 / (height * width)
+
+        if red_ratio > 0.02 and not self.stop_flag:
+            self.stop_flag = True
+            self.stopped_time = rospy.Time.now()
+            self.send_stop()
+            rospy.loginfo("Red line detected. Stopping for 2 seconds.")
+            return
+
+        if self.stop_flag:
+            if rospy.Time.now() - self.stopped_time > rospy.Duration(2):
+                self.stop_flag = False
+                rospy.loginfo("Resuming movement after stop.")
+            else:
+                self.send_stop()
+                return
+
+        # Lane detection
+        lower_white = np.array([0, 0, 200])
+        upper_white = np.array([180, 50, 255])
+        mask_white = cv2.inRange(hsv, lower_white, upper_white)
+
+        lower_yellow = np.array([20, 100, 100])
+        upper_yellow = np.array([30, 255, 255])
+        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+
+        combined = cv2.bitwise_or(mask_white, mask_yellow)
+        moments = cv2.moments(combined)
+
+        if moments['m00'] > 0:
+            cx = int(moments['m10'] / moments['m00'])
+            err = (width // 2) - cx
+
+            self.send_control(err)
+        else:
+            self.send_control(0)
+
+    def send_stop(self):
+        cmd = Twist2DStamped()
+        cmd.v = 0.0
+        cmd.omega = 0.0
+        self.pub.publish(cmd)
+
+    def send_control(self, error):
+        cmd = Twist2DStamped()
+        cmd.v = 0.2
+        cmd.omega = float(error) / 100
+        self.pub.publish(cmd)
+
+    def run(self):
+        rospy.spin()
+
+if __name__ == '__main__':
+    node = LaneFollower()
+    node.run()
