@@ -1,0 +1,40 @@
+duck:
+  hh: 21
+  hl: 0
+  sh: 255
+  sl: 220
+  vh: 255
+  vl: 200
+lane_image:
+  bottom_left_x: 720
+  bottom_left_y: 444
+  bottom_right_x: 0
+  bottom_right_y: 440
+  top_left_x: 262
+  top_left_y: 160
+  top_right_x: 419
+  top_right_y: 160
+white:
+  hh: 173
+  hl: 0
+  sh: 56
+  sl: 0
+  vh: 255
+  vl: 150
+yellow:
+  hh: 53
+  hl: 19
+  sh: 255
+  sl: 71
+  vh: 255
+  vl: 124
+
+red:
+  hh: 10
+  hl: 0
+  sh: 255
+  sl: 90
+  vh: 255
+  vl: 115
+
+
